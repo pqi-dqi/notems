@@ -1,44 +1,49 @@
 import os
-import requests
 import json
+import requests
 from seleniumbase import SB
 
-# Configuration
-NOTES_TO_WATCH = ["note1", "note2", "note3"] # Add your 100+ names here
-DISCORD_WEBHOOK = os.environ['DISCORD_WEBHOOK']
-DATA_FILE = "last_known_state.json"
+# Add your notes here or load from a file
+NOTES_TO_CHECK = [
+    "https://note.ms/soup",
+    "https://note.ms/example1",
+    # Add your 100+ URLs here
+]
 
-def get_note_content(note_name):
-    url = f"https://note.ms/{note_name}"
-    # The 'uc=True' is the secret sauce for Cloudflare
-    with SB(uc=True, headless=True) as sb:
+WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK")
+DATA_FILE = "last_state.json"
+
+def send_discord(message):
+    requests.post(WEBHOOK_URL, json={"content": message})
+
+# Load previous content
+if os.path.exists(DATA_FILE):
+    with open(DATA_FILE, "r") as f:
+        history = json.load(f)
+else:
+    history = {}
+
+changed = False
+
+with SB(uc=True, headless=True) as sb:
+    for url in NOTES_TO_CHECK:
         try:
-            sb.uc_open_with_reconnect(url, 5) # 5 sec wait for CF challenge
-            # note.ms stores content in a div with id 'content'
-            return sb.get_text("#content")
+            # UC Open handles the Cloudflare challenge
+            sb.uc_open_with_reconnect(url, 4)
+            sb.sleep(2) # Wait for JS to load the note content
+            
+            # note.ms content is usually in the #content element
+            current_text = sb.get_text("#content")
+            
+            if url in history and history[url] != current_text:
+                send_discord(f"🔔 **Change detected!**\nPage: {url}")
+                changed = True
+            
+            history[url] = current_text
         except Exception as e:
-            print(f"Failed to fetch {note_name}: {e}")
-            return None
+            print(f"Error checking {url}: {e}")
 
-def main():
-    # Load previous data
-    if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, 'r') as f:
-            history = json.load(f)
-    else:
-        history = {}
-
-    for note in NOTES_TO_WATCH:
-        current_text = get_note_content(note)
-        if current_text and current_text != history.get(note):
-            # Send Discord Notification
-            msg = {"content": f"🚨 **Change detected in {note}!**\nhttps://note.ms/{note}"}
-            requests.post(DISCORD_WEBHOOK, json=msg)
-            history[note] = current_text
-
-    # Save new state
-    with open(DATA_FILE, 'w') as f:
+# Save state if changed
+if changed:
+    with open(DATA_FILE, "w") as f:
         json.dump(history, f)
-
-if __name__ == "__main__":
-    main()
