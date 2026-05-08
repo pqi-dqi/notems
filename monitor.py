@@ -7,7 +7,6 @@ from seleniumbase import SB
 NOTES_TO_CHECK = [
     "https://note.ms/soup",
     "https://note.ms/example1",
-    # You can add up to 100+ here
 ]
 
 WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK")
@@ -31,8 +30,8 @@ if os.path.exists(DATA_FILE):
 
 changed_pages = []
 
-# Using UC (Undetected) and headless=False (working inside xvfb)
-with SB(uc=True, headless=False, slow_mode=True) as sb:
+# Removed slow_mode from here to fix the TypeError
+with SB(uc=True, headless=False) as sb:
     for url in NOTES_TO_CHECK:
         try:
             print(f"Checking: {url}")
@@ -42,11 +41,12 @@ with SB(uc=True, headless=False, slow_mode=True) as sb:
             # Step 2: Bypass Cloudflare Checkbox
             sb.uc_gui_click_captcha() 
             
-            # Step 3: Wait for the note content (textarea)
-            sb.wait_for_element("textarea#note", timeout=25)
+            # Step 3: Wait for the textarea
+            # Using a more generic selector in case the ID is slightly different
+            sb.wait_for_element("textarea", timeout=25)
             
-            # Step 4: Get text
-            current_text = sb.get_attribute("textarea#note", "value")
+            # Step 4: Get text (note.ms puts content in the 'value' of the textarea)
+            current_text = sb.get_attribute("textarea", "value")
             
             # Step 5: Compare
             if url in history and history[url] != current_text:
