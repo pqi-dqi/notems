@@ -3,9 +3,11 @@ import json
 import requests
 from seleniumbase import SB
 
+# 1. ADD YOUR URLS HERE
 NOTES_TO_CHECK = [
     "https://note.ms/soup",
     "https://note.ms/example1",
+    # You can add up to 100+ here
 ]
 
 WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK")
@@ -13,39 +15,54 @@ DATA_FILE = "last_state.json"
 
 def send_discord(message):
     if WEBHOOK_URL:
-        requests.post(WEBHOOK_URL, json={"content": message})
+        try:
+            requests.post(WEBHOOK_URL, json={"content": message})
+        except Exception as e:
+            print(f"Webhook failed: {e}")
 
+# Load previous state
 history = {}
 if os.path.exists(DATA_FILE):
     with open(DATA_FILE, "r") as f:
-        try: history = json.load(f)
-        except: history = {}
+        try:
+            history = json.load(f)
+        except:
+            history = {}
 
-changed = False
+changed_pages = []
 
-# We use 'headless2' mode which is better at hiding from Cloudflare
-with SB(uc=True, headless2=True, agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36") as sb:
+# Using UC (Undetected) and headless=False (working inside xvfb)
+with SB(uc=True, headless=False, slow_mode=True) as sb:
     for url in NOTES_TO_CHECK:
         try:
-            sb.uc_open_with_reconnect(url, 5)
+            print(f"Checking: {url}")
+            # Step 1: Open the page
+            sb.uc_open_with_reconnect(url, 7)
             
-            # This handles the "Turnstile" checkbox if it appears
-            sb.uc_gui_handle_captcha() 
+            # Step 2: Bypass Cloudflare Checkbox
+            sb.uc_gui_click_captcha() 
             
-            # Wait longer and try to find the textarea
-            sb.wait_for_element("textarea", timeout=20)
+            # Step 3: Wait for the note content (textarea)
+            sb.wait_for_element("textarea#note", timeout=25)
             
-            # note.ms usually uses the first textarea on the page
-            current_text = sb.get_attribute("textarea", "value")
+            # Step 4: Get text
+            current_text = sb.get_attribute("textarea#note", "value")
             
+            # Step 5: Compare
             if url in history and history[url] != current_text:
-                send_discord(f"🔔 **Change detected!**\nPage: {url}")
-                changed = True
+                changed_pages.append(url)
             
             history[url] = current_text
-            print(f"✅ Successfully checked {url}")
+            print(f"✅ Success")
+            
         except Exception as e:
-            print(f"❌ Error checking {url}: {e}")
+            print(f"❌ Failed {url}: {str(e)[:50]}...")
 
+# Send notifications if there are changes
+if changed_pages:
+    for page in changed_pages:
+        send_discord(f"🔔 **Change detected at:** {page}")
+
+# Save the new state
 with open(DATA_FILE, "w") as f:
-    json.dump(history, f)
+    json.dump(history, f, indent=4)
