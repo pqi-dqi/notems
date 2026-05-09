@@ -25,7 +25,7 @@ def monitor():
                 print(f"🌐 Visiting {url}")
                 page.goto(url, wait_until="domcontentloaded", timeout=60000)
                 
-                # Wait for the textarea to appear
+                # Wait for the textarea 't'
                 page.wait_for_selector("#t", timeout=15000)
                 
                 current_text = page.evaluate("() => document.getElementById('t').value")
@@ -37,11 +37,10 @@ def monitor():
                 print(f"✍️ Writing signature...")
                 new_text = current_text + "\n" + SIGNATURE
                 
-                # Fixed: Using a clean single-line JS injection
-                js_code = "new_val => { const el = document.getElementById('t'); el.value = new_val; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); }"
-                page.evaluate(js_code, new_text)
+                # Injecting via a cleaner anonymous function
+                page.evaluate("([val]) => { const el = document.getElementById('t'); el.value = val; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); }", [new_text])
                 
-                # Give the site a few seconds to perform the auto-save
+                # Wait for the site's auto-save (AJAX) to fire
                 time.sleep(5)
                 print(f"🚀 Success!")
 
