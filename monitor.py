@@ -7,14 +7,14 @@ SIGNATURE = "-- Soup"
 
 def monitor():
     if not os.path.exists('urls.txt'):
-        print("urls.txt not found")
+        print("urls.txt not found! Please create it.")
         return
 
     with open('urls.txt', 'r') as f:
         urls = [line.strip() for line in f.readlines() if line.strip()]
 
     with sync_playwright() as p:
-        # Launching the browser in headless mode
+        # Launching a real browser engine
         browser = p.chromium.launch(headless=True)
         context = browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
@@ -24,41 +24,37 @@ def monitor():
 
         for url in urls:
             try:
-                print(f"🌐 Opening {url}...")
-                # networkidle waits for the page to stop loading data
+                print(f"🌐 Navigating to {url}...")
+                # Wait for the network to be quiet
                 page.goto(url, wait_until="networkidle", timeout=60000)
                 
-                # Wait for the site's internal scripts to load
+                # Give the site's JavaScript time to render the textarea
                 time.sleep(5)
 
-                # Get the current text from the textarea (ID is 't')
+                # Fetch the value from the note.ms text box (id='t')
                 current_text = page.evaluate("() => document.getElementById('t').value")
 
                 if SIGNATURE in current_text:
-                    print(f"✅ {url} is already signed.")
+                    print(f"✅ {url} already has your signature.")
                     continue
 
-                print(f"✍️ Signature missing. Re-occupying...")
-                
-                # We append our signature
+                print(f"✍️ Signature missing. Updating...")
                 new_text = current_text + "\n" + SIGNATURE
                 
-                # Inject the new text into the box
+                # Inject text and trigger the site's internal 'save' events
                 page.evaluate(f"new_val => {{ document.getElementById('t').value = new_val; }}", new_text)
-                
-                # This part is key: it tricks the site into thinking a human typed something
                 page.evaluate("document.getElementById('t').dispatchEvent(new Event('input', { bubbles: true }));")
                 page.evaluate("document.getElementById('t').dispatchEvent(new Event('change', { bubbles: true }));")
                 
-                # Wait for the site's AJAX to finish saving
+                # Wait for the 'Auto-save' to finish
                 time.sleep(5)
-                print(f"🚀 Success for {url}")
+                print(f"🚀 Success! {url} updated.")
 
             except Exception as e:
-                print(f"❌ Failed to process {url}: {e}")
+                print(f"❌ Failed {url}: {e}")
             
-            # Slow down to avoid being flagged as a spammer
-            time.sleep(random.uniform(3, 6))
+            # Human-like delay between pages
+            time.sleep(random.uniform(2, 5))
 
         browser.close()
 
