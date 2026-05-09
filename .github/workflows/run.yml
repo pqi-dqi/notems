@@ -1,36 +1,27 @@
 name: Note.ms Monitor
+
 on:
-  schedule:
-    - cron: '*/10 * * * *' # Runs every 10 minutes
+  repository_dispatch:
+    types: [ping_monitor]
   workflow_dispatch: # Allows manual testing
 
 jobs:
-  monitor:
+  run-monitor:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
+          python-version: '3.9'
 
-      - name: Install Dependencies
-        run: |
-          pip install seleniumbase requests
-          sudo apt-get update
-          sudo apt-get install -y xvfb
+      - name: Install dependencies
+        run: pip install requests beautifulsoup4
 
-      - name: Run Monitor with Virtual Display
+      - name: Run Monitor Script
         env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-        run: xvfb-run --auto-servernum python monitor.py
-
-      - name: Commit and Push Changes
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add last_state.json
-          git commit -m "Update last state" || exit 0
-          git push https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/${{ github.repository }}.git
+          # If you need to post to a webhook or use a token, add it here
+          PYTHONUNBUFFERED: 1 
+        run: python monitor.py
