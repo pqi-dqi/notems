@@ -1,66 +1,64 @@
-import cloudscraper
+import os
 import time
 import random
-import os
+from playwright.sync_api import sync_playwright
 
-SIGNATURE = "\n-- Soup"
+SIGNATURE = "-- Soup"
 
 def monitor():
     if not os.path.exists('urls.txt'):
-        print("Error: urls.txt missing")
+        print("urls.txt not found")
         return
 
     with open('urls.txt', 'r') as f:
         urls = [line.strip() for line in f.readlines() if line.strip()]
 
-    # Create a scraper that bypasses Cloudflare/Bot protection
-    scraper = cloudscraper.create_scraper(
-        browser={
-            'browser': 'chrome',
-            'platform': 'windows',
-            'desktop': True
-        }
-    )
+    with sync_playwright() as p:
+        # Launch a real browser
+        browser = p.chromium.launch(headless=True)
+        # Give it a real human-looking profile
+        context = browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        )
+        
+        page = context.new_page()
 
-    for url in urls:
-        try:
-            # 1. Get current content
-            print(f"👀 Checking {url}...")
-            resp = scraper.get(url, timeout=15)
-            
-            if resp.status_code != 200:
-                print(f"❌ Could not reach {url}. Status: {resp.status_code}")
-                continue
+        for url in urls:
+            try:
+                print(f"🌐 Opening {url}...")
+                page.goto(url, wait_until="networkidle", timeout=60000)
+                
+                # Give it a second to load the text area content
+                time.sleep(2)
 
-            current_text = resp.text
+                # Use JavaScript to get the content of the textarea (usually 't' on note.ms)
+                current_text = page.evaluate("() => document.getElementById('t').value")
 
-            # If our signature is there, we are good
-            if SIGNATURE in current_text:
-                print(f"✅ Already occupied.")
-                continue
-            
-            # Anti-detection delay
-            time.sleep(random.uniform(4, 7))
-            
-            # 2. Update the page
-            print(f"✍️ Re-occupying...")
-            payload = {'t': current_text + SIGNATURE}
-            
-            # Some sites prefer the data sent as a string or form
-            post_resp = scraper.post(
-                url, 
-                data=payload, 
-                headers={'X-Requested-With': 'XMLHttpRequest', 'Referer': url},
-                timeout=15
-            )
-            
-            if post_resp.status_code == 200:
-                print(f"🚀 SUCCESS! Soup signature added.")
-            else:
-                print(f"❌ Failed. Status: {post_resp.status_code}")
+                if SIGNATURE in current_text:
+                    print(f"✅ {url} already has Soup.")
+                    continue
 
-        except Exception as e:
-            print(f"❌ Script Error: {e}")
+                print(f"✍️ Re-occupying {url}...")
+                
+                # We update the textarea and trigger the save event
+                new_text = current_text + "\n" + SIGNATURE
+                page.evaluate(f"new_val => {{ document.getElementById('t').value = new_val; }}", new_text)
+                
+                # Mimic a 'change' event to trigger the site's auto-save
+                page.evaluate("document.getElementById('t').dispatchEvent(new Event('input', { bubbles: true }));")
+                page.evaluate("document.getElementById('t').dispatchEvent(new Event('change', { bubbles: true }));")
+                
+                # Wait for the save to trigger
+                time.sleep(3)
+                print(f"🚀 Success!")
+
+            except Exception as e:
+                print(f"❌ Failed {url}: {e}")
+            
+            # Random delay between pages
+            time.sleep(random.uniform(2, 5))
+
+        browser.close()
 
 if __name__ == "__main__":
     monitor()
