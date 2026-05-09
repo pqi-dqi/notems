@@ -1,0 +1,24 @@
+name: Note.ms Monitor
+
+on:
+  repository_dispatch:
+    types: [ping_monitor]
+  workflow_dispatch: # Allows you to run it manually from GitHub UI
+
+jobs:
+  run-monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run Monitor
+        run: python monitor.py
