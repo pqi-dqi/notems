@@ -17,10 +17,12 @@ jobs:
         with:
           python-version: '3.9'
 
-      # Combining everything into one block to prevent environment mismatch
       - name: Install and Run
         run: |
           python -m pip install --upgrade pip
-          pip install playwright
+          python -m pip install playwright
           python -m playwright install chromium --with-deps
+          echo "--- DEBUG: INSTALLED PACKAGES ---"
+          python -m pip list
+          echo "--- STARTING SCRIPT ---"
           python monitor.py
