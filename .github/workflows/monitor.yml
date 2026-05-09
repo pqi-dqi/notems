@@ -3,7 +3,7 @@ name: Note.ms Monitor
 on:
   repository_dispatch:
     types: [ping_monitor]
-  workflow_dispatch: # Allows you to run it manually from GitHub UI
+  workflow_dispatch:
 
 jobs:
   run-monitor:
@@ -13,12 +13,12 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5 # Updated to v5
         with:
           python-version: '3.9'
 
       - name: Install dependencies
-        run: pip install requests
+        run: pip install requests cloudscraper
 
       - name: Run Monitor
         run: python monitor.py
