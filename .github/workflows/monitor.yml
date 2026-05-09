@@ -16,12 +16,13 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.9'
+          cache: 'pip' # This helps speed up future runs
 
-      - name: Install dependencies
+      - name: Install Playwright and Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install playwright
-          playwright install chromium --with-deps
+          python -m playwright install chromium --with-deps
 
-      - name: Run Monitor
+      - name: Run Monitor Script
         run: python monitor.py
