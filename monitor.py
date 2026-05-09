@@ -1,61 +1,51 @@
-import os
-import json
 import requests
-from seleniumbase import SB
+import time
+import random
+import os
 
-# This reads the URLs from your text file
-URL_FILE = "urls.txt"
-DATA_FILE = "last_state.json"
-WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK")
+# Configuration
+SIGNATURE = "\n-- Soup"
+# The message you want to leave if the page is "empty" or needs occupying
+NOTE_CONTENT = "这页无聊的页面已经被占领了。" 
 
-def get_urls():
-    if os.path.exists(URL_FILE):
-        with open(URL_FILE, "r") as f:
-            # Reads lines, removes spaces, and ignores empty lines
-            return [line.strip() for line in f if line.strip()]
-    return []
+def monitor():
+    # 1. Load URLs
+    if not os.path.exists('urls.txt'):
+        print("Error: urls.txt not found!")
+        return
 
-def send_discord(message):
-    if WEBHOOK_URL:
+    with open('urls.txt', 'r') as f:
+        urls = [line.strip() for line in f.readlines() if line.strip()]
+
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Content-Type': 'application/x-www-form-urlencoded'
+    }
+
+    for url in urls:
         try:
-            requests.post(WEBHOOK_URL, json={"content": message})
-        except:
-            pass
+            # Step A: Read the page
+            response = requests.get(url, headers=headers, timeout=10)
+            current_text = response.text
 
-# Load previous state
-history = {}
-if os.path.exists(DATA_FILE):
-    with open(DATA_FILE, "r") as f:
-        try: history = json.load(f)
-        except: history = {}
+            # Step B: Rate Limit Safety - Random Sleep
+            # This makes the 25-page crawl look less like a bot attack
+            time.sleep(random.uniform(2.0, 4.0))
 
-NOTES_TO_CHECK = get_urls()
-changed_pages = []
+            # Step C: Check if "Soup" is already there
+            if SIGNATURE in current_text:
+                print(f"✅ {url} is already occupied by Soup.")
+                continue
+            
+            # Step D: If not there, update the page
+            print(f"⚠️ {url} changed or cleared! Re-occupying...")
+            new_data = {"t": current_text + SIGNATURE}
+            
+            # Note.ms usually accepts POST requests to update content
+            requests.post(url, headers=headers, data=new_data, timeout=10)
+            
+        except Exception as e:
+            print(f"❌ Error checking {url}: {e}")
 
-if not NOTES_TO_CHECK:
-    print("No URLs found in urls.txt!")
-else:
-    with SB(uc=True, headless=False) as sb:
-        for url in NOTES_TO_CHECK:
-            try:
-                print(f"Checking: {url}")
-                sb.uc_open_with_reconnect(url, 7)
-                sb.uc_gui_click_captcha() 
-                sb.wait_for_element("textarea", timeout=20)
-                
-                current_text = sb.get_attribute("textarea", "value")
-                
-                if url in history and history[url] != current_text:
-                    changed_pages.append(url)
-                
-                history[url] = current_text
-                print(f"✅ Success")
-            except Exception as e:
-                print(f"❌ Failed {url}")
-
-    if changed_pages:
-        for page in changed_pages:
-            send_discord(f"🔔 **Change detected:** {page}")
-
-    with open(DATA_FILE, "w") as f:
-        json.dump(history, f, indent=4)
+if __name__ == "__main__":
+    monitor()
