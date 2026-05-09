@@ -3,49 +3,58 @@ import time
 import random
 import os
 
-# Configuration
 SIGNATURE = "\n-- Soup"
-NOTE_CONTENT = "这页无聊的页面已经被占领了。" 
 
 def monitor():
     if not os.path.exists('urls.txt'):
-        print("Error: urls.txt not found!")
         return
 
     with open('urls.txt', 'r') as f:
         urls = [line.strip() for line in f.readlines() if line.strip()]
 
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'X-Requested-With': 'XMLHttpRequest' # This tells the server "I am an app request"
-    }
+    # Create a session to handle cookies automatically
+    session = requests.Session()
+    
+    # Very specific headers to look like a real browser
+    session.headers.update({
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Origin': 'https://note.ms',
+        'Connection': 'keep-alive',
+    })
 
     for url in urls:
         try:
-            # 1. Get current content
-            response = requests.get(url, headers=headers, timeout=10)
-            current_text = response.text
+            # 1. 'GET' the page first to look like a visitor and get cookies
+            print(f"👀 Visiting {url}...")
+            get_resp = session.get(url, timeout=10)
+            current_text = get_resp.text
             
-            time.sleep(random.uniform(1, 2))
+            # Anti-detection sleep
+            time.sleep(random.uniform(3, 6))
 
             if SIGNATURE in current_text:
-                print(f"✅ {url} already has Soup.")
+                print(f"✅ {url} is safe.")
                 continue
             
-            print(f"⚠️ {url} needs update. Sending payload...")
+            # 2. Prepare the POST with a Referer
+            print(f"✍️ Re-occupying {url}...")
+            post_headers = {
+                'Referer': url,
+                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
             
-            # 2. Updated Payload Logic
-            # Note.ms often takes the content in a field named 't'
             payload = {'t': current_text + SIGNATURE}
             
-            # We use data=payload to send it as form-data
-            post_resp = requests.post(url, headers=headers, data=payload, timeout=10)
+            # Note.ms often uses a simple post, but we'll try to mimic the form
+            post_resp = session.post(url, data=payload, headers=post_headers, timeout=10)
             
             if post_resp.status_code == 200:
-                print(f"🚀 Success! Updated {url}")
+                print(f"🚀 Success!")
             else:
-                print(f"❌ Failed to update {url}. Status: {post_resp.status_code}")
+                print(f"❌ Still getting {post_resp.status_code}. They are blocking the IP.")
 
         except Exception as e:
             print(f"❌ Error: {e}")
