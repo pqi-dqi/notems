@@ -1,28 +1,16 @@
-name: Note.ms Browser Monitor
-
+name: Note.ms Monitor (Lightweight)
 on:
-  repository_dispatch:
-    types: [ping_monitor]
   workflow_dispatch:
-
 jobs:
   run-monitor:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
+      - uses: actions/checkout@v4
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.9'
-
-      - name: Install and Run
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install playwright
-          python -m playwright install chromium --with-deps
-          echo "--- DEBUG: INSTALLED PACKAGES ---"
-          python -m pip list
-          echo "--- STARTING SCRIPT ---"
-          python monitor.py
+      - name: Install Requests
+        run: pip install requests
+      - name: Run Script
+        run: python monitor.py
