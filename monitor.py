@@ -7,55 +7,61 @@ SIGNATURE = "-- Soup"
 
 def monitor():
     if not os.path.exists('urls.txt'):
-        print("❌ Error: urls.txt not found!")
+        print("❌ urls.txt not found!")
         return
 
     with open('urls.txt', 'r') as f:
         urls = [line.strip() for line in f.readlines() if line.strip()]
 
-    print(f"📋 Found {len(urls)} URLs to check.")
-
     with sync_playwright() as p:
-        print("🚀 Launching browser...")
-        browser = p.chromium.launch(headless=True)
+        # 1. Use a more convincing User Agent and standard window size
+        browser = p.chromium.launch(headless=True) 
         context = browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            viewport={'width': 1920, 'height': 1080}
         )
+        
+        # 2. Add extra stealth: mask webdriver property
         page = context.new_page()
+        page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
 
         for url in urls:
             try:
-                print(f"🌐 Visiting: {url}")
-                # Faster loading strategy: 'commit' means it just waits for the URL to resolve
-                page.goto(url, wait_until="commit", timeout=30000)
+                print(f"🌐 Visiting {url}")
+                # Increased timeout and changed wait strategy
+                response = page.goto(url, wait_until="networkidle", timeout=30000)
                 
-                # Wait specifically for the text box for up to 10 seconds
-                print("⏳ Waiting for text box...")
-                page.wait_for_selector("#t", timeout=10000)
+                # Check if we got blocked (403 Forbidden)
+                if response.status == 403:
+                    print(f"🚫 Blocked by site (403) at {url}")
+                    continue
+
+                # 3. Use a more flexible selector check
+                print("⏳ Waiting for content...")
+                page.wait_for_selector("#t", timeout=20000)
                 
                 current_text = page.evaluate("() => document.getElementById('t').value")
 
                 if SIGNATURE in current_text:
-                    print(f"✅ Signature found. Skipping.")
+                    print(f"✅ Already signed.")
                     continue
 
-                print(f"✍️ Writing signature to {url}...")
+                print(f"✍️ Writing signature...")
                 new_text = current_text + "\n" + SIGNATURE
                 
-                # Execute the save
-                page.evaluate("([val]) => { const el = document.getElementById('t'); el.value = val; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); }", [new_text])
+                # Use 'fill' instead of raw JS injection to mimic typing
+                page.fill("#t", new_text)
                 
-                # Short wait to ensure the site's auto-save kicks in
-                time.sleep(3)
-                print(f"✨ Successfully updated {url}")
+                # Wait for auto-save
+                time.sleep(4)
+                print(f"🚀 Success!")
 
             except Exception as e:
-                print(f"⚠️ Warning: Could not process {url}. Error: {e}")
+                print(f"⚠️ Failed at {url}: {str(e)[:50]}...")
             
-            # Small random delay to look human
-            time.sleep(random.uniform(1, 3))
+            # 4. Longer, more variable sleep to avoid rate-limiting
+            time.sleep(random.uniform(3, 7))
 
-        print("🏁 All tasks complete. Closing browser.")
         browser.close()
 
 if __name__ == "__main__":
