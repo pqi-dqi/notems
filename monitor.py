@@ -5,11 +5,9 @@ import os
 
 # Configuration
 SIGNATURE = "\n-- Soup"
-# The message you want to leave if the page is "empty" or needs occupying
 NOTE_CONTENT = "这页无聊的页面已经被占领了。" 
 
 def monitor():
-    # 1. Load URLs
     if not os.path.exists('urls.txt'):
         print("Error: urls.txt not found!")
         return
@@ -19,33 +17,38 @@ def monitor():
 
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Content-Type': 'application/x-www-form-urlencoded'
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-Requested-With': 'XMLHttpRequest' # This tells the server "I am an app request"
     }
 
     for url in urls:
         try:
-            # Step A: Read the page
+            # 1. Get current content
             response = requests.get(url, headers=headers, timeout=10)
             current_text = response.text
+            
+            time.sleep(random.uniform(1, 2))
 
-            # Step B: Rate Limit Safety - Random Sleep
-            # This makes the 25-page crawl look less like a bot attack
-            time.sleep(random.uniform(2.0, 4.0))
-
-            # Step C: Check if "Soup" is already there
             if SIGNATURE in current_text:
-                print(f"✅ {url} is already occupied by Soup.")
+                print(f"✅ {url} already has Soup.")
                 continue
             
-            # Step D: If not there, update the page
-            print(f"⚠️ {url} changed or cleared! Re-occupying...")
-            new_data = {"t": current_text + SIGNATURE}
+            print(f"⚠️ {url} needs update. Sending payload...")
             
-            # Note.ms usually accepts POST requests to update content
-            requests.post(url, headers=headers, data=new_data, timeout=10)
+            # 2. Updated Payload Logic
+            # Note.ms often takes the content in a field named 't'
+            payload = {'t': current_text + SIGNATURE}
             
+            # We use data=payload to send it as form-data
+            post_resp = requests.post(url, headers=headers, data=payload, timeout=10)
+            
+            if post_resp.status_code == 200:
+                print(f"🚀 Success! Updated {url}")
+            else:
+                print(f"❌ Failed to update {url}. Status: {post_resp.status_code}")
+
         except Exception as e:
-            print(f"❌ Error checking {url}: {e}")
+            print(f"❌ Error: {e}")
 
 if __name__ == "__main__":
     monitor()
